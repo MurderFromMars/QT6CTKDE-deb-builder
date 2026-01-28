@@ -11,10 +11,9 @@ This project fills that gap by creating a proper Debian package and adding an au
 
 ## Install
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/MurderFromMars/QT6CTKDE-deb-builder/main/QT6KDE.sh -o QT6KDE.sh
-chmod +x QT6KDE.sh
-sudo ./QT6KDE.sh
+```
+curl -fsSL https://raw.githubusercontent.com/MurderFromMars/QT6CTKDE-deb-builder/main/QT6KDE.sh -o QT6KDE.sh && sudo bash QT6KDE.sh
+
 
 ```
 
