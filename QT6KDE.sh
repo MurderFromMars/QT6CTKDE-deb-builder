@@ -1,4 +1,3 @@
-cat > /tmp/test-build.sh <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -97,6 +96,7 @@ spinner() {
         sleep 0.1
         printf "\r"
     done
+    wait $pid  # CRITICAL: Wait for the process to actually finish
     printf "  ${C_GREEN}${ICON_CHECK}${C_RESET} ${C_DIM}%s${C_RESET}\n" "$message"
 }
 
@@ -309,7 +309,3 @@ printf "  ${C_DIM}\$${C_RESET} sudo dpkg -i %s\n" "$OUTPUT_FILE"
 printf "  ${C_DIM}\$${C_RESET} sudo systemctl enable --now ${PKGNAME}-update.timer\n\n"
 
 printf "${C_DIM}The auto-updater will check for updates daily.${C_RESET}\n"
-EOF
-
-chmod +x /tmp/test-build.sh
-/tmp/test-build.sh
