@@ -25,7 +25,7 @@ Works in any shell because it streams directly into bash.
 - Updates in place without reinstalling the package  
 - Cleans up after itself  
 - Outputs to Downloads
-- Automatically instals all dependencies for building
+- Automatically installs all dependencies for building
 
 ## Enabling the Updater
 
