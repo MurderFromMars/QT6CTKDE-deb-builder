@@ -8,7 +8,6 @@ WORKDIR="$(mktemp -d)"
 STAGEDIR="$WORKDIR/pkg"
 DEBIAN_DIR="$STAGEDIR/DEBIAN"
 INSTALL_PREFIX="/usr"
-DOWNLOADS="$HOME/Downloads"
 
 # Colors & Symbols
 C_RESET="\033[0m"
@@ -21,7 +20,6 @@ C_CYAN="\033[1;36m"
 C_MAGENTA="\033[1;35m"
 C_RED="\033[1;31m"
 
-# Icons
 ICON_ROCKET="🚀"
 ICON_PACKAGE="📦"
 ICON_GEAR="⚙️ "
@@ -32,10 +30,8 @@ ICON_WARN="⚠"
 ICON_CLEAN="🧹"
 ICON_SPARKLE="✨"
 
-# Terminal width
 TERM_WIDTH=$(tput cols 2>/dev/null || echo 80)
 
-# Functions
 print_header() {
     local text="$1"
     local width=$((TERM_WIDTH - 4))
@@ -49,34 +45,17 @@ print_header() {
     printf "╝${C_RESET}\n\n"
 }
 
-step() {
-    printf "${C_BLUE}${C_BOLD}  ${ICON_ARROW} ${C_RESET}${C_BOLD}%s${C_RESET}\n" "$1"
-}
-
-substep() {
-    printf "${C_DIM}     %s${C_RESET}\n" "$1"
-}
-
-done_msg() {
-    printf "${C_GREEN}${C_BOLD}  ${ICON_CHECK} ${C_RESET}${C_GREEN}%s${C_RESET}\n" "$1"
-}
-
-warn() {
-    printf "${C_YELLOW}${C_BOLD}  ${ICON_WARN} ${C_RESET}${C_YELLOW}%s${C_RESET}\n" "$1"
-}
-
-error() {
-    printf "${C_RED}${C_BOLD}  ✗ ${C_RESET}${C_RED}%s${C_RESET}\n" "$1"
-}
+step() { printf "${C_BLUE}${C_BOLD}  ${ICON_ARROW} ${C_RESET}${C_BOLD}%s${C_RESET}\n" "$1"; }
+substep() { printf "${C_DIM}     %s${C_RESET}\n" "$1"; }
+done_msg() { printf "${C_GREEN}${C_BOLD}  ${ICON_CHECK} ${C_RESET}${C_GREEN}%s${C_RESET}\n" "$1"; }
+warn() { printf "${C_YELLOW}${C_BOLD}  ${ICON_WARN} ${C_RESET}${C_YELLOW}%s${C_RESET}\n" "$1"; }
+error() { printf "${C_RED}${C_BOLD}  ✗ ${C_RESET}${C_RED}%s${C_RESET}\n" "$1"; }
 
 progress_bar() {
-    local current=$1
-    local total=$2
-    local width=40
+    local current=$1 total=$2 width=40
     local percentage=$((current * 100 / total))
     local filled=$((current * width / total))
     local empty=$((width - filled))
-    
     printf "\r  ${C_CYAN}["
     printf "${C_GREEN}█%.0s" $(seq 1 $filled)
     printf "${C_DIM}░%.0s" $(seq 1 $empty)
@@ -84,60 +63,62 @@ progress_bar() {
 }
 
 spinner() {
-    local pid=$1
-    local message=$2
+    local pid="$1" message="$2"
     local spinstr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-    local temp
     printf "  "
-    while kill -0 $pid 2>/dev/null; do
-        temp=${spinstr#?}
+    while kill -0 "$pid" 2>/dev/null; do
         printf "${C_MAGENTA}%c${C_RESET} ${C_DIM}%s${C_RESET}" "$spinstr" "$message"
-        spinstr=$temp${spinstr%"$temp"}
+        spinstr="${spinstr#?}${spinstr%${spinstr#?}}"
         sleep 0.1
         printf "\r"
     done
-    wait $pid
+    wait "$pid"
     printf "  ${C_GREEN}${ICON_CHECK}${C_RESET} ${C_DIM}%s${C_RESET}\n" "$message"
 }
 
-cleanup() {
-    if [ -d "$WORKDIR" ]; then
-        rm -rf "$WORKDIR"
-    fi
-}
+cleanup() { [ -d "$WORKDIR" ] && rm -rf "$WORKDIR"; }
 trap cleanup EXIT
 
-# Main Script
+# ---------------------------------------------------------------------------
+# SUDO LOGIC
+# ---------------------------------------------------------------------------
+
+if [ "$EUID" -ne 0 ]; then
+    print_header "${ICON_PACKAGE} qt6ct-kde Package Builder"
+    warn "This script must run as root."
+    echo
+    echo "Run it like this:"
+    echo "  curl -fsSL <url> -o QT6KDE.sh"
+    echo "  chmod +x QT6KDE.sh"
+    echo "  sudo ./QT6KDE.sh"
+    echo
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
+
 clear
 print_header "${ICON_ROCKET} Building qt6ct-kde v${VERSION}"
 
-# Dependencies - use sudo for individual commands instead of re-exec
+# Dependencies
 step "${ICON_GEAR} Checking dependencies"
 DEPS=("build-essential" "cmake" "ninja-build" "qt6-base-dev" "qt6-tools-dev" "libqt6svg6-dev" "git")
 MISSING=()
 
 for dep in "${DEPS[@]}"; do
-    if ! dpkg -l | grep -q "^ii  $dep"; then
+    if ! dpkg-query -W -f='${Status}' "$dep" 2>/dev/null | grep -q "install ok installed"; then
         MISSING+=("$dep")
     fi
 done
 
 if [ ${#MISSING[@]} -gt 0 ]; then
     substep "Installing: ${MISSING[*]}"
-    
-    # Request sudo upfront
-    if [ "$EUID" -ne 0 ]; then
-        warn "Requesting sudo privileges for package installation..."
-        sudo -v
-    fi
-    
-    sudo apt update -qq 2>&1 | grep -v "^[WE]:" || true
-    
+    apt update -qq 2>/dev/null || true
     total=${#MISSING[@]}
     current=0
     for dep in "${MISSING[@]}"; do
         ((current++))
-        sudo apt install -y "$dep" >/dev/null 2>&1 &
+        apt install -y "$dep" >/dev/null 2>&1 &
         spinner $! "Installing $dep ($current/$total)"
     done
     done_msg "Dependencies installed"
@@ -172,7 +153,7 @@ echo
 step "${ICON_GEAR} Configuring build"
 cmake -B build -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX >/dev/null 2>&1 &
+    -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" >/dev/null 2>&1 &
 spinner $! "Running CMake"
 done_msg "Configuration complete"
 
@@ -181,7 +162,11 @@ echo
 # Build
 step "${ICON_HAMMER} Compiling"
 cmake --build build 2>&1 | while read -r line; do
-    if [[ $line =~ \[([0-9]+)/([0-9]+)\] ]]; then
+    if [[ $line =~ 
+
+\[([0-9]+)/([0-9]+)\]
+
+ ]]; then
         progress_bar "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
     fi
 done
@@ -198,10 +183,10 @@ done_msg "Files staged"
 
 echo
 
-# Create updater
+# Updater
 step "${ICON_GEAR} Creating auto-updater"
 mkdir -p "$STAGEDIR/usr/local/bin"
-cat > "$STAGEDIR/usr/local/bin/${PKGNAME}-updater" <<'UPDATER_EOF'
+cat > "$STAGEDIR/usr/local/bin/${PKGNAME}-updater" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 REPO="https://www.opencode.net/trialuser/qt6ct"
@@ -221,56 +206,53 @@ CURRENT="$(cat "$LOCAL_HASH_FILE" 2>/dev/null || echo none)"
 
 [[ "$LATEST" == "$CURRENT" ]] && { rm -rf "$WORKDIR"; exit 0; }
 
-cmake -B build -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" >/dev/null 2>&1
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" >/dev/null 2>&1
 cmake --build build >/dev/null 2>&1
 cmake --install build >/dev/null 2>&1
 
 echo "$LATEST" > "$LOCAL_HASH_FILE"
 rm -rf "$WORKDIR"
-UPDATER_EOF
+EOF
 chmod 755 "$STAGEDIR/usr/local/bin/${PKGNAME}-updater"
 
-# Systemd units
 mkdir -p "$STAGEDIR/etc/systemd/system"
-cat > "$STAGEDIR/etc/systemd/system/${PKGNAME}-update.service" <<SYSTEMD_EOF
+cat > "$STAGEDIR/etc/systemd/system/${PKGNAME}-update.service" <<EOF
 [Unit]
 Description=Update qt6ct-kde from upstream repo
 
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/${PKGNAME}-updater
-SYSTEMD_EOF
+EOF
 
-cat > "$STAGEDIR/etc/systemd/system/${PKGNAME}-update.timer" <<SYSTEMD_EOF
+cat > "$STAGEDIR/etc/systemd/system/${PKGNAME}-update.timer" <<EOF
 [Unit]
 Description=Daily update check for qt6ct-kde
 
 [Timer]
 OnCalendar=daily
 Persistent=true
+Unit=${PKGNAME}-update.service
 
 [Install]
 WantedBy=timers.target
-SYSTEMD_EOF
+EOF
 
-substep "Updater script: /usr/local/bin/${PKGNAME}-updater"
-substep "Systemd service: ${PKGNAME}-update.timer"
 done_msg "Auto-updater configured"
 
 echo
 
 # Control file
-cat > "$DEBIAN_DIR/control" <<CONTROL_EOF
+ARCH="$(dpkg --print-architecture)"
+cat > "$DEBIAN_DIR/control" <<EOF
 Package: ${PKGNAME}
 Version: ${VERSION}
 Section: utils
 Priority: optional
-Architecture: amd64
-Maintainer: Unknown
+Architecture: ${ARCH}
+Maintainer: qt6ct-kde Builder <noreply@example>
 Description: Qt6 Configuration Utility patched for KDE
-CONTROL_EOF
+EOF
 
 # Build package
 step "${ICON_PACKAGE} Building .deb package"
@@ -278,11 +260,7 @@ cd "$WORKDIR"
 dpkg-deb --build pkg >/dev/null 2>&1 &
 spinner $! "Creating package"
 
-# Move to Downloads
-DOWNLOADS="$HOME/Downloads"
-mkdir -p "$DOWNLOADS"
-
-OUTPUT_FILE="$DOWNLOADS/${PKGNAME}_${VERSION}_amd64.deb"
+OUTPUT_FILE="/root/${PKGNAME}_${VERSION}_${ARCH}.deb"
 mv pkg.deb "$OUTPUT_FILE"
 
 PKG_SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
@@ -290,7 +268,6 @@ done_msg "Package created (${PKG_SIZE})"
 
 echo
 
-# Final message
 print_header "${ICON_SPARKLE} Build Complete!"
 
 printf "${C_BOLD}Package:${C_RESET} ${C_CYAN}%s${C_RESET}\n" "$OUTPUT_FILE"
