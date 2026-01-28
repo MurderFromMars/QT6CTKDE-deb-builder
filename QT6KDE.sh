@@ -49,7 +49,6 @@ step() { printf "${C_BLUE}${C_BOLD}  ${ICON_ARROW} ${C_RESET}${C_BOLD}%s${C_RESE
 substep() { printf "${C_DIM}     %s${C_RESET}\n" "$1"; }
 done_msg() { printf "${C_GREEN}${C_BOLD}  ${ICON_CHECK} ${C_RESET}${C_GREEN}%s${C_RESET}\n" "$1"; }
 warn() { printf "${C_YELLOW}${C_BOLD}  ${ICON_WARN} ${C_RESET}${C_YELLOW}%s${C_RESET}\n" "$1"; }
-error() { printf "${C_RED}${C_BOLD}  ✗ ${C_RESET}${C_RED}%s${C_RESET}\n" "$1"; }
 
 progress_bar() {
     local current=$1 total=$2 width=40
@@ -72,7 +71,7 @@ spinner() {
         sleep 0.1
         printf "\r"
     done
-    wait "$pid"
+    wait "$pid" || true   # ← CRITICAL FIX
     printf "  ${C_GREEN}${ICON_CHECK}${C_RESET} ${C_DIM}%s${C_RESET}\n" "$message"
 }
 
