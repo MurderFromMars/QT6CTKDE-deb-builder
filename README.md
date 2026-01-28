@@ -24,7 +24,8 @@ Works in any shell because it streams directly into bash.
 - Includes a systemd service and timer for daily updates  
 - Updates in place without reinstalling the package  
 - Cleans up after itself  
-- Outputs to Downloads  
+- Outputs to Downloads
+- Automatically instals all dependencies for building
 
 ## Enabling the Updater
 
@@ -39,8 +40,3 @@ sudo apt remove qt6ct-kde
 sudo rm -rf /var/lib/qt6ct-kde
 ```
 
-## Requirements
-
-- Debian, Ubuntu, Mint, or derivative  
-- CMake, Ninja Build, Git, Curl, Build Essential  
-- Systemd  
