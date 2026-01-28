@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# qt6ct-kde — deb builder 
+# qt6ct-kde — deb builder (clean + pretty)
 PKGNAME="qt6ct-kde"
 VERSION="0.11"
-REPO_URL="https://download.qt.io/official_releases/qt6ct/qt6ct-0.9.tar.xz"  # actual source
 WORKDIR="$(mktemp -d)"
 STAGEDIR="$WORKDIR/pkg"
 DEBIAN_DIR="$STAGEDIR/DEBIAN"
@@ -20,20 +19,12 @@ done_msg() { printf "${C_GREEN}✓${C_RESET} %s\n" "$1"; }
 step "workspace: $WORKDIR"
 mkdir -p "$STAGEDIR" "$DEBIAN_DIR"
 
-step "downloading source"
+step "cloning qt6ct-kde source"
 cd "$WORKDIR"
-# Clone the AUR repo to get the PKGBUILD
-git clone "https://aur.archlinux.org/qt6ct-kde.git" aur
-cd aur
-
-# Extract source URL from PKGBUILD
-SOURCE_URL=$(grep -Po '(?<=source=\()[^)]+' PKGBUILD | tr -d '"' | head -1)
-step "source URL: $SOURCE_URL"
-
-# Download and extract
-wget -q "$SOURCE_URL"
-tar xf *.tar.xz
-cd qt6ct-*/
+# Clone the actual qt6ct-kde source (KDE-patched version)
+git clone https://www.opencode.net/trialuser/qt6ct src
+cd src
+git checkout "tags/$VERSION" 2>/dev/null || git checkout "$VERSION" 2>/dev/null || true
 
 step "configuring"
 cmake -B build -G Ninja \
@@ -51,13 +42,15 @@ mkdir -p "$STAGEDIR/usr/local/bin"
 cat > "$STAGEDIR/usr/local/bin/${PKGNAME}-updater" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-AUR_REPO="https://aur.archlinux.org/qt6ct-kde.git"
+REPO="https://www.opencode.net/trialuser/qt6ct"
+VERSION="0.11"
 INSTALL_PREFIX="/usr"
 WORKDIR="$(mktemp -d)"
 cd "$WORKDIR"
 
-git clone "$AUR_REPO" aur
-cd aur
+git clone "$REPO" src
+cd src
+git checkout "tags/$VERSION" 2>/dev/null || git checkout "$VERSION" 2>/dev/null || true
 
 LATEST="$(git rev-parse HEAD)"
 LOCAL_HASH_FILE="/var/lib/qt6ct-kde/hash"
@@ -65,11 +58,6 @@ mkdir -p /var/lib/qt6ct-kde
 CURRENT="$(cat "$LOCAL_HASH_FILE" 2>/dev/null || echo none)"
 
 [[ "$LATEST" == "$CURRENT" ]] && { rm -rf "$WORKDIR"; exit 0; }
-
-SOURCE_URL=$(grep -Po '(?<=source=\()[^)]+' PKGBUILD | tr -d '"' | head -1)
-wget -q "$SOURCE_URL"
-tar xf *.tar.xz
-cd qt6ct-*/
 
 cmake -B build -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
