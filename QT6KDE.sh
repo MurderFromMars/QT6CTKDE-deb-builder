@@ -379,7 +379,7 @@ printf "${C_BOLD}Version:${C_RESET} ${C_CYAN}%s${C_RESET}\n" "$VERSION"
 printf "${C_BOLD}Size:${C_RESET}    ${C_CYAN}%s${C_RESET}\n\n" "$PKG_SIZE"
 
 printf "${C_BOLD}To install:${C_RESET}\n"
-printf "  ${C_DIM}\$${C_RESET} sudo dpkg -i %s\n" "$OUTPUT_FILE"
+printf "  ${C_DIM}\$${C_RESET} sudo apt install %s\n" "$OUTPUT_FILE"
 printf "  ${C_DIM}\$${C_RESET} sudo systemctl enable --now ${PKGNAME}-update.timer\n\n"
 
 printf "${C_DIM}The auto-updater will check for updates daily.${C_RESET}\n"
