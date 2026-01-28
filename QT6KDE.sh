@@ -107,12 +107,16 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Check for sudo/root
+# Check for sudo/root - FIXED FOR CURL PIPE
 if [ "$EUID" -ne 0 ]; then
     print_header "${ICON_PACKAGE} qt6ct-kde Package Builder"
     warn "Requesting sudo privileges for dependency installation..."
     echo
-    exec sudo bash "$0" "$@"
+    # Save script to temp file for re-execution
+    SCRIPT_TEMP=$(mktemp)
+    cat "$0" > "$SCRIPT_TEMP" 2>/dev/null || cat <&0 > "$SCRIPT_TEMP"
+    chmod +x "$SCRIPT_TEMP"
+    exec sudo bash "$SCRIPT_TEMP" "$@"
 fi
 
 # Main Script
