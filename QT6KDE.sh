@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# qt6ct-kde — deb builder (clean + pretty)
+# qt6ct-kde — deb builder 
 PKGNAME="qt6ct-kde"
 VERSION="0.11"
 REPO_URL="https://download.qt.io/official_releases/qt6ct/qt6ct-0.9.tar.xz"  # actual source
