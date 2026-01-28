@@ -21,7 +21,6 @@ mkdir -p "$STAGEDIR" "$DEBIAN_DIR"
 
 step "cloning qt6ct-kde source"
 cd "$WORKDIR"
-# Clone the actual qt6ct-kde source (KDE-patched version)
 git clone https://www.opencode.net/trialuser/qt6ct src
 cd src
 git checkout "tags/$VERSION" 2>/dev/null || git checkout "$VERSION" 2>/dev/null || true
