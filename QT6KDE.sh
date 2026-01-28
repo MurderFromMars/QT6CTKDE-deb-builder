@@ -78,7 +78,7 @@ print_header "${ICON_ROCKET} Building qt6ct-kde v${VERSION}"
 
 # Dependencies
 step "${ICON_GEAR} Checking dependencies"
-DEPS=("build-essential" "cmake" "ninja-build" "qt6-base-dev" "qt6-tools-dev" "libqt6svg6-dev" "git")
+DEPS=("build-essential" "cmake" "ninja-build" "qt6-base-dev" "qt6-base-private-dev" "qt6-tools-dev" "libqt6svg6-dev" "git")
 MISSING=()
 
 for dep in "${DEPS[@]}"; do
