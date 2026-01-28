@@ -283,8 +283,20 @@ if ! dpkg-deb --build --root-owner-group pkg > /dev/null 2>&1; then
     exit 1
 fi
 
-OUTPUT_FILE="/root/${PKGNAME}_${VERSION}_${ARCH}.deb"
+# Determine appropriate output location
+if [ -n "${SUDO_USER:-}" ]; then
+    USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+    OUTPUT_DIR="$USER_HOME/Downloads"
+else
+    OUTPUT_DIR="/root"
+fi
+
+# Create Downloads directory if it doesn't exist
+mkdir -p "$OUTPUT_DIR"
+
+OUTPUT_FILE="$OUTPUT_DIR/${PKGNAME}_${VERSION}_${ARCH}.deb"
 mv pkg.deb "$OUTPUT_FILE" || { error "Failed to move package"; exit 1; }
+chown "${SUDO_USER:-root}:${SUDO_USER:-root}" "$OUTPUT_FILE" 2>/dev/null || true
 
 PKG_SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
 done_msg "Package created (${PKG_SIZE})"
