@@ -96,7 +96,7 @@ spinner() {
         sleep 0.1
         printf "\r"
     done
-    wait $pid  # CRITICAL: Wait for the process to actually finish
+    wait $pid
     printf "  ${C_GREEN}${ICON_CHECK}${C_RESET} ${C_DIM}%s${C_RESET}\n" "$message"
 }
 
@@ -107,23 +107,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Check for sudo/root - FIXED FOR CURL PIPE
-if [ "$EUID" -ne 0 ]; then
-    print_header "${ICON_PACKAGE} qt6ct-kde Package Builder"
-    warn "Requesting sudo privileges for dependency installation..."
-    echo
-    # Save script to temp file for re-execution
-    SCRIPT_TEMP=$(mktemp)
-    cat "$0" > "$SCRIPT_TEMP" 2>/dev/null || cat <&0 > "$SCRIPT_TEMP"
-    chmod +x "$SCRIPT_TEMP"
-    exec sudo bash "$SCRIPT_TEMP" "$@"
-fi
-
 # Main Script
 clear
 print_header "${ICON_ROCKET} Building qt6ct-kde v${VERSION}"
 
-# Dependencies
+# Dependencies - use sudo for individual commands instead of re-exec
 step "${ICON_GEAR} Checking dependencies"
 DEPS=("build-essential" "cmake" "ninja-build" "qt6-base-dev" "qt6-tools-dev" "libqt6svg6-dev" "git")
 MISSING=()
@@ -136,13 +124,20 @@ done
 
 if [ ${#MISSING[@]} -gt 0 ]; then
     substep "Installing: ${MISSING[*]}"
-    apt update -qq 2>&1 | grep -v "^[WE]:" || true
+    
+    # Request sudo upfront
+    if [ "$EUID" -ne 0 ]; then
+        warn "Requesting sudo privileges for package installation..."
+        sudo -v
+    fi
+    
+    sudo apt update -qq 2>&1 | grep -v "^[WE]:" || true
     
     total=${#MISSING[@]}
     current=0
     for dep in "${MISSING[@]}"; do
         ((current++))
-        apt install -y "$dep" >/dev/null 2>&1 &
+        sudo apt install -y "$dep" >/dev/null 2>&1 &
         spinner $! "Installing $dep ($current/$total)"
     done
     done_msg "Dependencies installed"
@@ -284,17 +279,11 @@ dpkg-deb --build pkg >/dev/null 2>&1 &
 spinner $! "Creating package"
 
 # Move to Downloads
-if [ -n "${SUDO_USER:-}" ]; then
-    REAL_USER="$SUDO_USER"
-    REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
-    DOWNLOADS="$REAL_HOME/Downloads"
-    mkdir -p "$DOWNLOADS"
-    chown "$REAL_USER:$REAL_USER" "$DOWNLOADS"
-fi
+DOWNLOADS="$HOME/Downloads"
+mkdir -p "$DOWNLOADS"
 
 OUTPUT_FILE="$DOWNLOADS/${PKGNAME}_${VERSION}_amd64.deb"
 mv pkg.deb "$OUTPUT_FILE"
-[ -n "${SUDO_USER:-}" ] && chown "$SUDO_USER:$SUDO_USER" "$OUTPUT_FILE"
 
 PKG_SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
 done_msg "Package created (${PKG_SIZE})"
