@@ -273,6 +273,75 @@ Description: Qt6 Configuration Utility patched for KDE
  This is a KDE-compatible patched version.
 CONTROL_EOF
 
+# Create postinst script to set up environment
+cat > "$DEBIAN_DIR/postinst" <<POSTINST_EOF
+#!/bin/bash
+set -e
+
+# Set up QT_QPA_PLATFORMTHEME for all users
+PROFILE_FILE="/etc/profile.d/qt6ct.sh"
+
+cat > "\$PROFILE_FILE" <<'ENV_EOF'
+# Set Qt6 platform theme to qt6ct
+export QT_QPA_PLATFORMTHEME=qt6ct
+ENV_EOF
+
+chmod 644 "\$PROFILE_FILE"
+
+echo ""
+echo "========================================="
+echo "qt6ct-kde installation complete!"
+echo "========================================="
+echo ""
+echo "IMPORTANT: To activate qt6ct, you need to either:"
+echo "  1. Log out and log back in, OR"
+echo "  2. Run: source /etc/profile.d/qt6ct.sh"
+echo ""
+echo "Then you can configure Qt6 apps by running: qt6ct"
+echo ""
+
+exit 0
+POSTINST_EOF
+
+chmod 755 "$DEBIAN_DIR/postinst"
+
+# Create prerm script to clean up
+cat > "$DEBIAN_DIR/prerm" <<PRERM_EOF
+#!/bin/bash
+set -e
+
+# Stop and disable the update timer if it's running
+if systemctl is-active --quiet ${PKGNAME}-update.timer; then
+    systemctl stop ${PKGNAME}-update.timer
+fi
+
+if systemctl is-enabled --quiet ${PKGNAME}-update.timer 2>/dev/null; then
+    systemctl disable ${PKGNAME}-update.timer
+fi
+
+exit 0
+PRERM_EOF
+
+chmod 755 "$DEBIAN_DIR/prerm"
+
+# Create postrm script to remove environment file
+cat > "$DEBIAN_DIR/postrm" <<POSTRM_EOF
+#!/bin/bash
+set -e
+
+if [ "\$1" = "purge" ]; then
+    rm -f /etc/profile.d/qt6ct.sh
+    rm -rf /var/lib/qt6ct-kde
+    
+    echo "qt6ct-kde has been completely removed."
+    echo "You may need to log out and back in to clear the environment variable."
+fi
+
+exit 0
+POSTRM_EOF
+
+chmod 755 "$DEBIAN_DIR/postrm"
+
 # Build package
 step "${ICON_PACKAGE} Building .deb package"
 cd "$WORKDIR" || exit 1
