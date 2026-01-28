@@ -8,9 +8,6 @@ The script compiles from source, installs cleanly, and places the finished packa
 QT6CT KDE is available on the AUR but not packaged for Debian or Ubuntu. Building it manually is repetitive and there is no native update path.  
 This project fills that gap by creating a proper Debian package and adding an automatic updater so you get a clean install and seamless updates without rebuilding or reinstalling.
 
-## Author
-
-Created and maintained by **MurderFromMars** on GitHub.
 
 ## Install
 
