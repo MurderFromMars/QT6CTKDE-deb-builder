@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 # qt6ct-kde — deb builder (clean + pretty)
-
 PKGNAME="qt6ct-kde"
 VERSION="0.11"
-REPO_URL="https://aur.archlinux.org/qt6ct-kde.git"   # correct upstream source
-
+REPO_URL="https://download.qt.io/official_releases/qt6ct/qt6ct-0.9.tar.xz"  # actual source
 WORKDIR="$(mktemp -d)"
 STAGEDIR="$WORKDIR/pkg"
 DEBIAN_DIR="$STAGEDIR/DEBIAN"
@@ -17,16 +14,26 @@ DOWNLOADS="$HOME/Downloads"
 C_RESET="\033[0m"
 C_BLUE="\033[1;34m"
 C_GREEN="\033[1;32m"
-
 step() { printf "${C_BLUE}→${C_RESET} %s\n" "$1"; }
 done_msg() { printf "${C_GREEN}✓${C_RESET} %s\n" "$1"; }
 
 step "workspace: $WORKDIR"
 mkdir -p "$STAGEDIR" "$DEBIAN_DIR"
 
-step "cloning repo"
-git clone "$REPO_URL" "$WORKDIR/src"
-cd "$WORKDIR/src"
+step "downloading source"
+cd "$WORKDIR"
+# Clone the AUR repo to get the PKGBUILD
+git clone "https://aur.archlinux.org/qt6ct-kde.git" aur
+cd aur
+
+# Extract source URL from PKGBUILD
+SOURCE_URL=$(grep -Po '(?<=source=\()[^)]+' PKGBUILD | tr -d '"' | head -1)
+step "source URL: $SOURCE_URL"
+
+# Download and extract
+wget -q "$SOURCE_URL"
+tar xf *.tar.xz
+cd qt6ct-*/
 
 step "configuring"
 cmake -B build -G Ninja \
@@ -37,45 +44,46 @@ step "building"
 cmake --build build
 
 step "staging"
-cmake --install build --prefix "$INSTALL_PREFIX" --destdir "$STAGEDIR"
+DESTDIR="$STAGEDIR" cmake --install build
 
 # updater
 mkdir -p "$STAGEDIR/usr/local/bin"
 cat > "$STAGEDIR/usr/local/bin/${PKGNAME}-updater" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-
-REPO="https://aur.archlinux.org/qt6ct-kde.git"
+AUR_REPO="https://aur.archlinux.org/qt6ct-kde.git"
 INSTALL_PREFIX="/usr"
-
 WORKDIR="$(mktemp -d)"
 cd "$WORKDIR"
 
-git clone "$REPO" src
-cd src
+git clone "$AUR_REPO" aur
+cd aur
 
 LATEST="$(git rev-parse HEAD)"
 LOCAL_HASH_FILE="/var/lib/qt6ct-kde/hash"
-
 mkdir -p /var/lib/qt6ct-kde
 CURRENT="$(cat "$LOCAL_HASH_FILE" 2>/dev/null || echo none)"
 
-[[ "$LATEST" == "$CURRENT" ]] && exit 0
+[[ "$LATEST" == "$CURRENT" ]] && { rm -rf "$WORKDIR"; exit 0; }
+
+SOURCE_URL=$(grep -Po '(?<=source=\()[^)]+' PKGBUILD | tr -d '"' | head -1)
+wget -q "$SOURCE_URL"
+tar xf *.tar.xz
+cd qt6ct-*/
 
 cmake -B build -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX"
-
 cmake --build build
-cmake --install build --prefix "$INSTALL_PREFIX"
+cmake --install build
 
 echo "$LATEST" > "$LOCAL_HASH_FILE"
+rm -rf "$WORKDIR"
 EOF
 chmod 755 "$STAGEDIR/usr/local/bin/${PKGNAME}-updater"
 
 # systemd
 mkdir -p "$STAGEDIR/etc/systemd/system"
-
 cat > "$STAGEDIR/etc/systemd/system/${PKGNAME}-update.service" <<EOF
 [Unit]
 Description=Update qt6ct-kde from upstream repo
