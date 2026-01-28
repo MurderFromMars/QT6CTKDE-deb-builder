@@ -5,7 +5,7 @@ set -euo pipefail
 
 PKGNAME="qt6ct-kde"
 VERSION="0.11"
-REPO_URL="https://aur.archlinux.org/qt6ct-kde.git"   # ← FIXED: correct upstream source
+REPO_URL="https://aur.archlinux.org/qt6ct-kde.git"   # correct upstream source
 
 WORKDIR="$(mktemp -d)"
 STAGEDIR="$WORKDIR/pkg"
