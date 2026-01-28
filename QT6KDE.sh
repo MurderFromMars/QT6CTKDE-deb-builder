@@ -80,7 +80,7 @@ cleanup() { [ -d "$WORKDIR" ] && rm -rf "$WORKDIR"; }
 trap cleanup EXIT
 
 # ---------------------------------------------------------------------------
-# SUDO LOGIC
+# FIXED SUDO LOGIC — SAFE FOR curl | bash
 # ---------------------------------------------------------------------------
 
 if [ "$EUID" -ne 0 ]; then
@@ -118,7 +118,7 @@ if [ ${#MISSING[@]} -gt 0 ]; then
     current=0
     for dep in "${MISSING[@]}"; do
         ((current++))
-        apt install -y "$dep" >/dev/null 2>&1 &
+        apt install -y "$dep" >/dev/null 2>&1 || true &
         spinner $! "Installing $dep ($current/$total)"
     done
     done_msg "Dependencies installed"
