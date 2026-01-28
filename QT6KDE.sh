@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# qt6ct-kde — deb builder
+# qt6ct-kde — deb builder (Fixed Version)
 PKGNAME="qt6ct-kde"
 VERSION="0.11"
 WORKDIR="$(mktemp -d)"
@@ -36,11 +36,11 @@ print_header() {
     local width=$((TERM_WIDTH - 4))
     printf "\n${C_BOLD}${C_CYAN}"
     printf "╔"
-    printf "═%.0s" $(seq 1 $width)
+    printf '═%.0s' $(seq 1 $width)
     printf "╗\n"
     printf "║ %-$((width-1))s║\n" "$text"
     printf "╚"
-    printf "═%.0s" $(seq 1 $width)
+    printf '═%.0s' $(seq 1 $width)
     printf "╝${C_RESET}\n\n"
 }
 
@@ -48,12 +48,17 @@ step() { printf "${C_BLUE}${C_BOLD}  ${ICON_ARROW} ${C_RESET}${C_BOLD}%s${C_RESE
 substep() { printf "${C_DIM}     %s${C_RESET}\n" "$1"; }
 done_msg() { printf "${C_GREEN}${C_BOLD}  ${ICON_CHECK} ${C_RESET}${C_GREEN}%s${C_RESET}\n" "$1"; }
 warn() { printf "${C_YELLOW}${C_BOLD}  ${ICON_WARN} ${C_RESET}${C_YELLOW}%s${C_RESET}\n" "$1"; }
+error() { printf "${C_RED}${C_BOLD}  ✗ ${C_RESET}${C_RED}%s${C_RESET}\n" "$1"; }
 
-cleanup() { rm -rf "$WORKDIR"; }
+cleanup() { 
+    if [ -d "$WORKDIR" ]; then
+        rm -rf "$WORKDIR"
+    fi
+}
 trap cleanup EXIT
 
 # ---------------------------------------------------------------------------
-# SUDO CHECK — SAFE FOR curl | bash
+# SUDO CHECK
 # ---------------------------------------------------------------------------
 
 if [ "$EUID" -ne 0 ]; then
@@ -61,9 +66,7 @@ if [ "$EUID" -ne 0 ]; then
     warn "This script must run as root."
     echo
     echo "Run it like this:"
-    echo "  curl -fsSL <url> -o QT6KDE.sh"
-    echo "  chmod +x QT6KDE.sh"
-    echo "  sudo ./QT6KDE.sh"
+    echo "  sudo bash $0"
     echo
     exit 1
 fi
@@ -86,8 +89,9 @@ done
 
 if [ ${#MISSING[@]} -gt 0 ]; then
     substep "Installing: ${MISSING[*]}"
-    apt update -qq
-    apt install -y "${MISSING[@]}"
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq || { error "Failed to update package lists"; exit 1; }
+    apt-get install -y -qq "${MISSING[@]}" || { error "Failed to install dependencies"; exit 1; }
     done_msg "Dependencies installed"
 else
     done_msg "All dependencies satisfied"
@@ -97,7 +101,7 @@ echo
 
 # Workspace
 step "${ICON_PACKAGE} Preparing workspace"
-mkdir -p "$STAGEDIR" "$DEBIAN_DIR"
+mkdir -p "$STAGEDIR" "$DEBIAN_DIR" || { error "Failed to create workspace"; exit 1; }
 substep "Working in: ${C_DIM}$WORKDIR${C_RESET}"
 done_msg "Workspace ready"
 
@@ -105,11 +109,23 @@ echo
 
 # Clone
 step "${ICON_PACKAGE} Fetching source code"
-cd "$WORKDIR"
-git clone https://www.opencode.net/trialuser/qt6ct src >/dev/null
-cd src
-git checkout "tags/$VERSION" 2>/dev/null || git checkout "$VERSION" 2>/dev/null || true
-COMMIT=$(git rev-parse --short HEAD)
+cd "$WORKDIR" || exit 1
+
+if ! git clone --quiet --depth 1 --branch "$VERSION" https://www.opencode.net/trialuser/qt6ct src 2>/dev/null; then
+    substep "Trying alternative clone method..."
+    if ! git clone --quiet https://www.opencode.net/trialuser/qt6ct src; then
+        error "Failed to clone repository"
+        exit 1
+    fi
+    cd src || exit 1
+    git checkout "tags/$VERSION" 2>/dev/null || git checkout "$VERSION" 2>/dev/null || {
+        warn "Could not checkout version $VERSION, using default branch"
+    }
+else
+    cd src || exit 1
+fi
+
+COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 substep "Commit: ${C_CYAN}$COMMIT${C_RESET}"
 done_msg "Source ready"
 
@@ -117,23 +133,38 @@ echo
 
 # Configure
 step "${ICON_GEAR} Configuring build"
-cmake -B build -G Ninja \
+if ! cmake -B build -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" >/dev/null
+    -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" > /dev/null 2>&1; then
+    error "CMake configuration failed"
+    cmake -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX"
+    exit 1
+fi
 done_msg "Configuration complete"
 
 echo
 
 # Build
 step "${ICON_HAMMER} Compiling"
-cmake --build build
+if ! cmake --build build --parallel 2>&1 | grep -i "error" > /dev/null; then
+    cmake --build build --parallel > /dev/null 2>&1 || {
+        error "Build failed"
+        cmake --build build --parallel
+        exit 1
+    }
+fi
 done_msg "Build complete"
 
 echo
 
 # Stage
 step "${ICON_PACKAGE} Staging files"
-DESTDIR="$STAGEDIR" cmake --install build >/dev/null
+DESTDIR="$STAGEDIR" cmake --install build > /dev/null 2>&1 || {
+    error "Installation to staging directory failed"
+    exit 1
+}
 done_msg "Files staged"
 
 echo
@@ -141,46 +172,71 @@ echo
 # Updater
 step "${ICON_GEAR} Creating auto-updater"
 mkdir -p "$STAGEDIR/usr/local/bin"
-cat > "$STAGEDIR/usr/local/bin/${PKGNAME}-updater" <<'EOF'
+cat > "$STAGEDIR/usr/local/bin/${PKGNAME}-updater" <<'UPDATER_EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+
 REPO="https://www.opencode.net/trialuser/qt6ct"
 VERSION="0.11"
 INSTALL_PREFIX="/usr"
 WORKDIR="$(mktemp -d)"
-cd "$WORKDIR"
 
-git clone "$REPO" src >/dev/null
-cd src
-git checkout "tags/$VERSION" 2>/dev/null || git checkout "$VERSION" 2>/dev/null || true
+cleanup() {
+    if [ -d "$WORKDIR" ]; then
+        rm -rf "$WORKDIR"
+    fi
+}
+trap cleanup EXIT
+
+cd "$WORKDIR" || exit 1
+
+if ! git clone --quiet --depth 1 --branch "$VERSION" "$REPO" src 2>/dev/null; then
+    git clone --quiet "$REPO" src || exit 1
+    cd src || exit 1
+    git checkout "tags/$VERSION" 2>/dev/null || git checkout "$VERSION" 2>/dev/null || true
+else
+    cd src || exit 1
+fi
 
 LATEST="$(git rev-parse HEAD)"
 LOCAL_HASH_FILE="/var/lib/qt6ct-kde/hash"
 mkdir -p /var/lib/qt6ct-kde
 CURRENT="$(cat "$LOCAL_HASH_FILE" 2>/dev/null || echo none)"
 
-[[ "$LATEST" == "$CURRENT" ]] && { rm -rf "$WORKDIR"; exit 0; }
+if [ "$LATEST" = "$CURRENT" ]; then
+    exit 0
+fi
 
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" >/dev/null
-cmake --build build >/dev/null
-cmake --install build >/dev/null
+if ! cmake -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" > /dev/null 2>&1; then
+    exit 1
+fi
+
+if ! cmake --build build --parallel > /dev/null 2>&1; then
+    exit 1
+fi
+
+if ! cmake --install build > /dev/null 2>&1; then
+    exit 1
+fi
 
 echo "$LATEST" > "$LOCAL_HASH_FILE"
-rm -rf "$WORKDIR"
-EOF
+UPDATER_EOF
+
 chmod 755 "$STAGEDIR/usr/local/bin/${PKGNAME}-updater"
 
 mkdir -p "$STAGEDIR/etc/systemd/system"
-cat > "$STAGEDIR/etc/systemd/system/${PKGNAME}-update.service" <<EOF
+cat > "$STAGEDIR/etc/systemd/system/${PKGNAME}-update.service" <<SERVICE_EOF
 [Unit]
 Description=Update qt6ct-kde from upstream repo
 
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/${PKGNAME}-updater
-EOF
+SERVICE_EOF
 
-cat > "$STAGEDIR/etc/systemd/system/${PKGNAME}-update.timer" <<EOF
+cat > "$STAGEDIR/etc/systemd/system/${PKGNAME}-update.timer" <<TIMER_EOF
 [Unit]
 Description=Daily update check for qt6ct-kde
 
@@ -191,31 +247,44 @@ Unit=${PKGNAME}-update.service
 
 [Install]
 WantedBy=timers.target
-EOF
+TIMER_EOF
 
 done_msg "Auto-updater configured"
 
 echo
 
+# Calculate installed size
+INSTALLED_SIZE=$(du -sk "$STAGEDIR" | cut -f1)
+
 # Control file
 ARCH="$(dpkg --print-architecture)"
-cat > "$DEBIAN_DIR/control" <<EOF
+cat > "$DEBIAN_DIR/control" <<CONTROL_EOF
 Package: ${PKGNAME}
 Version: ${VERSION}
 Section: utils
 Priority: optional
 Architecture: ${ARCH}
-Maintainer: qt6ct-kde Builder <noreply@example>
+Installed-Size: ${INSTALLED_SIZE}
+Maintainer: qt6ct-kde Builder <noreply@example.com>
+Depends: libqt6core6, libqt6gui6, libqt6widgets6, libqt6svg6
 Description: Qt6 Configuration Utility patched for KDE
-EOF
+ qt6ct is a program that allows users to configure Qt6 settings
+ (theme, font, icons, etc.) under desktop environments other than KDE.
+ This is a KDE-compatible patched version.
+CONTROL_EOF
 
 # Build package
 step "${ICON_PACKAGE} Building .deb package"
-cd "$WORKDIR"
-dpkg-deb --build pkg >/dev/null
+cd "$WORKDIR" || exit 1
+
+if ! dpkg-deb --build --root-owner-group pkg > /dev/null 2>&1; then
+    error "Package build failed"
+    dpkg-deb --build --root-owner-group pkg
+    exit 1
+fi
 
 OUTPUT_FILE="/root/${PKGNAME}_${VERSION}_${ARCH}.deb"
-mv pkg.deb "$OUTPUT_FILE"
+mv pkg.deb "$OUTPUT_FILE" || { error "Failed to move package"; exit 1; }
 
 PKG_SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
 done_msg "Package created (${PKG_SIZE})"
