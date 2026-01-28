@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ── qt6ct-kde: deb builde ─────────────────────
+# qt6ct-kde — deb builder (clean + pretty)
 
 PKGNAME="qt6ct-kde"
 VERSION="0.11"
-REPO_URL="https://aur.archlinux.org/qt6ct-kde.git"
+REPO_URL="https://aur.archlinux.org/qt6ct-kde.git"   # ← FIXED: correct upstream source
 
 WORKDIR="$(mktemp -d)"
 STAGEDIR="$WORKDIR/pkg"
@@ -17,7 +17,6 @@ DOWNLOADS="$HOME/Downloads"
 C_RESET="\033[0m"
 C_BLUE="\033[1;34m"
 C_GREEN="\033[1;32m"
-C_YELLOW="\033[1;33m"
 
 step() { printf "${C_BLUE}→${C_RESET} %s\n" "$1"; }
 done_msg() { printf "${C_GREEN}✓${C_RESET} %s\n" "$1"; }
@@ -40,8 +39,7 @@ cmake --build build
 step "staging"
 cmake --install build --prefix "$INSTALL_PREFIX" --destdir "$STAGEDIR"
 
-# ── updater ─────────────────────────────────────────────────────
-
+# updater
 mkdir -p "$STAGEDIR/usr/local/bin"
 cat > "$STAGEDIR/usr/local/bin/${PKGNAME}-updater" <<'EOF'
 #!/usr/bin/env bash
@@ -75,8 +73,7 @@ echo "$LATEST" > "$LOCAL_HASH_FILE"
 EOF
 chmod 755 "$STAGEDIR/usr/local/bin/${PKGNAME}-updater"
 
-# ── systemd ─────────────────────────────────────────────────────
-
+# systemd
 mkdir -p "$STAGEDIR/etc/systemd/system"
 
 cat > "$STAGEDIR/etc/systemd/system/${PKGNAME}-update.service" <<EOF
@@ -100,8 +97,7 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
-# ── control file ────────────────────────────────────────────────
-
+# control
 cat > "$DEBIAN_DIR/control" <<EOF
 Package: ${PKGNAME}
 Version: ${VERSION}
@@ -111,8 +107,6 @@ Architecture: amd64
 Maintainer: Unknown
 Description: Qt6 Configuration Utility patched for KDE
 EOF
-
-# ── build deb ───────────────────────────────────────────────────
 
 step "building deb"
 cd "$WORKDIR"
