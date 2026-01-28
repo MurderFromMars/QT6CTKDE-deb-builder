@@ -78,7 +78,7 @@ print_header "${ICON_ROCKET} Building qt6ct-kde v${VERSION}"
 
 # Dependencies
 step "${ICON_GEAR} Checking dependencies"
-DEPS=("build-essential" "cmake" "ninja-build" "qt6-base-dev" "qt6-base-private-dev" "qt6-tools-dev" "libqt6svg6-dev" "git")
+DEPS=("build-essential" "cmake" "ninja-build" "qt6-base-dev" "qt6-base-private-dev" "qt6-tools-dev" "libqt6svg6-dev" "qml6-module-qtquick-controls" "git")
 MISSING=()
 
 for dep in "${DEPS[@]}"; do
@@ -266,11 +266,12 @@ Priority: optional
 Architecture: ${ARCH}
 Installed-Size: ${INSTALLED_SIZE}
 Maintainer: qt6ct-kde Builder <noreply@example.com>
-Depends: libqt6core6, libqt6gui6, libqt6widgets6, libqt6svg6
+Depends: libqt6core6, libqt6gui6, libqt6widgets6, libqt6svg6, qml6-module-qtquick-controls, qml6-module-org-kde-qqc2desktopstyle
 Description: Qt6 Configuration Utility patched for KDE
  qt6ct is a program that allows users to configure Qt6 settings
  (theme, font, icons, etc.) under desktop environments other than KDE.
- This is a KDE-compatible patched version.
+ This is a KDE-compatible patched version that can theme KDE applications
+ like Dolphin outside of Plasma desktop environment.
 CONTROL_EOF
 
 # Create postinst script to set up environment
