@@ -15,7 +15,7 @@ Created and maintained by **MurderFromMars** on GitHub.
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/MurderFromMars/QTeCTKDE-deb-builder/main/QT6KDE.sh | bash
+curl -fsSL https://raw.githubusercontent.com/MurderFromMars/QT6CTKDE-deb-builder/main/QT6KDE.sh | bash
 ```
 
 Works in any shell because it streams directly into bash.
